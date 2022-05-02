@@ -1,0 +1,9 @@
+{
+    "client": "discord-server-name",
+    "sentry-url": "sentryurlhere",
+    "sentry-enabled": true,
+    "shard-type": "set shard type here",
+    "shard-id": "1",
+    "logging": true,
+    "version": "bt-1.2.5"
+}

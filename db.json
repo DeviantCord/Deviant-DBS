@@ -1,0 +1,10 @@
+{
+    "database-host": "dbhosthere",
+    "database-host2": "dbhost2",
+    "database-host3": "dbhost3",
+    "database-username": "dbuser",
+    "database-password": "dpassword",
+    "database-port": 25060,
+    "database-name": "prod_deviantcord",
+    "trigger-file": "/tmp/trigger_file"
+}
