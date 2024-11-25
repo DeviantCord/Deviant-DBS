@@ -1,0 +1,8 @@
+{
+    "Hostname": "localhost",
+    "Password": "changeme",
+    "Username": "changeme",
+    "port": "5672",
+    "queue": "deviations",
+    "retry-delay": 25.5
+}

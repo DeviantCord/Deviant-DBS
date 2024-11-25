@@ -1,7 +1,7 @@
 """
 
-    DeviantCord 2 Discord Bot
-    Copyright (C) 2020  Errite Games LLC/ ErriteEpticRikez
+    Deviant-DBS
+    Copyright (C) 2020-2024  Errite Softworks LLC/ ErriteEpticRikez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published

@@ -1,7 +1,7 @@
 """
 
-    DeviantCord 2 Discord Bot
-    Copyright (C) 2020  Errite Games LLC/ ErriteEpticRikez
+    Deviant-DBS
+    Copyright (C) 2020-2024  Errite Softworks LLC/ ErriteEpticRikez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -73,6 +73,56 @@ def determineNewJournals(source_data, listener_ids):
             if source_data[index] == listener_ids[0]:
                 doContinue = False
             elif not source_data[index] == listener_ids[0]:
+                new_deviations = new_deviations + 1
+                index = index + 1
+            elif index == max:
+                doContinue = False
+            else:
+                index = index + 1
+                new_deviations = new_deviations + 1
+
+        return new_deviations
+
+def determineNewStatusIds(source_data, listener_ids):
+    # NOTE: Use ID's only not the JSON Object data
+    doContinue = True
+    new_deviations = 0
+    max = len(source_data)
+    index = 0
+    if len(source_data) == 0:
+        return 0
+    elif len(listener_ids) == 0:
+        return len(source_data)
+    else:
+        while doContinue:
+            if source_data[index] == listener_ids[0]:
+                doContinue = False
+            elif not source_data[index] == listener_ids[0]:
+                new_deviations = new_deviations + 1
+                index = index + 1
+            elif index == max:
+                doContinue = False
+            else:
+                index = index + 1
+                new_deviations = new_deviations + 1
+
+        return new_deviations
+
+def determineNewStatus(source_data, listener_ids):
+    # NOTE: source_data must be the results from DeviantArt or this will not work
+    doContinue = True
+    new_deviations = 0
+    max = len(source_data)
+    index = 0
+    if len(source_data) == 0:
+        return 0
+    elif len(listener_ids) == 0:
+        return len(source_data)
+    else:
+        while doContinue:
+            if source_data[index]["statusid"] == listener_ids[0]:
+                doContinue = False
+            elif not source_data[index]["statusid"] == listener_ids[0]:
                 new_deviations = new_deviations + 1
                 index = index + 1
             elif index == max:

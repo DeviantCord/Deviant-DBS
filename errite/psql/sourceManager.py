@@ -1,7 +1,7 @@
 """
 
-    DeviantCord 2 Discord Bot
-    Copyright (C) 2020  Errite Games LLC/ ErriteEpticRikez
+    Deviant-DBS
+    Copyright (C) 2020-2024  Errite Softworks LLC/ ErriteEpticRikez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -22,7 +22,6 @@ import logging
 from sentry_sdk import configure_scope, set_context, set_extra, capture_exception
 import psycopg2
 import psycopg2.extras
-import time
 import json
 import uuid
 import datetime
@@ -38,9 +37,9 @@ def updateSources(cursor, con, data, clientToken):
     change_sql = """ UPDATE deviantcord.deviation_data
                  SET dc_uuid = data.dcuuid, last_update = data.last_update, last_check = data.last_check, 
                  latest_img_urls = data.latest_img_url::text[], latest_pp_url = data.latest_pp_url::text,
-                 latest_deviation_url = data.latest_deviation_url,  response = data.response, last_urls = data.last_urls::text[],
+                 latest_deviation_url = data.latest_deviation_url, last_urls = data.last_urls::text[],
                   last_ids = data.last_ids::text[], given_offset = data.given_offset FROM (VALUES %s) AS data(dcuuid, last_update, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
-                             response, last_urls, last_ids, given_offset, artist, folderid, inverse_folder, hybrid, mature)
+                            last_urls, last_ids, given_offset, artist, folderid, inverse_folder, hybrid, mature)
                  WHERE deviantcord.deviation_data.artist = data.artist AND deviantcord.deviation_data.folderid = data.folderid AND
                  deviantcord.deviation_data.inverse_folder = data.inverse_folder AND deviantcord.deviation_data.hybrid = data.hybrid 
                  AND deviantcord.deviation_data.mature = data.mature"""
@@ -48,11 +47,11 @@ def updateSources(cursor, con, data, clientToken):
     hybrid_change_sql = """ UPDATE deviantcord.deviation_data
                  SET dc_uuid = data.dcuuid, last_update = data.last_update, last_check = data.last_check, 
                  latest_img_urls = data.latest_img_url::text[], latest_pp_url = data.latest_pp_url::text,
-                 latest_deviation_url = data.latest_deviation_url,  response = data.response, last_urls = data.last_urls::text[],
+                 latest_deviation_url = data.latest_deviation_url, last_urls = data.last_urls::text[],
                   last_ids = data.last_ids::text[], given_offset = data.given_offset, last_hybrid_ids = data.last_hybrid_ids::text[],
                   hybrid_urls = data.hybrid_urls::text[], hybrid_img_urls = data.hybrid_img_urls::text[]
                    FROM (VALUES %s) AS data(dcuuid, last_update, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
-                             response, last_urls, last_ids, given_offset,last_hybrid_ids, hybrid_urls, hybrid_img_urls, artist, folderid,
+                             last_urls, last_ids, given_offset,last_hybrid_ids, hybrid_urls, hybrid_img_urls, artist, folderid,
                              hybrid, inverse_folder, mature)
                  WHERE deviantcord.deviation_data.artist = data.artist AND deviantcord.deviation_data.folderid = data.folderid
                  AND deviantcord.deviation_data.hybrid = data.hybrid AND deviantcord.deviation_data.inverse_folder = data.inverse_folder
@@ -79,7 +78,6 @@ def updateSources(cursor, con, data, clientToken):
     try:
         for row in data:
 
-            hybridResponse = None
             check_only = False
             normal_update = True
             has_hybrid = False
@@ -94,13 +92,12 @@ def updateSources(cursor, con, data, clientToken):
             latest_img_url = row[7]
             latest_pp_url = row[8]
             latest_deviation_url = row[9]
-            response = row[10]
-            mature = row[11]
-            last_urls = row[12]
-            last_ids = row[13]
-            last_hybrids = row[14]
-            hybrid = row[15]
-            offset = row[16]
+            mature = row[10]
+            last_urls = row[11]
+            last_ids = row[12]
+            last_hybrids = row[13]
+            hybrid = row[14]
+            offset = row[15]
             timestr = datetime.datetime.now()
             didCatchup = False
 
@@ -176,7 +173,6 @@ def updateSources(cursor, con, data, clientToken):
                 last_updated = timestr
                 last_check = timestr
                 latest_img_url: str = gathered_resources["img-urls"]
-                response = json.dumps(da_response)
                 print("Triggered")
             elif len(last_ids) == 0 and not len(da_response["results"]) == 0:
                 gathered_resources = gatherGalleryFolderResources(da_response)
@@ -193,7 +189,6 @@ def updateSources(cursor, con, data, clientToken):
                 last_updated = timestr
                 last_check = timestr
                 latest_img_url: str = gathered_resources["img-urls"]
-                response = json.dumps(da_response)
                 print("Triggered")
             elif not da_response["results"][0]["deviationid"] == last_ids[0]:
                 gathered_resources = gatherGalleryFolderResources(da_response)
@@ -210,7 +205,6 @@ def updateSources(cursor, con, data, clientToken):
                 last_updated = timestr
                 last_check = timestr
                 latest_img_url:str = gathered_resources["img-urls"]
-                response = json.dumps(da_response)
                 print("Triggered")
             else:
                 last_check = timestr
@@ -219,21 +213,17 @@ def updateSources(cursor, con, data, clientToken):
             if latest_pp_url is None:
                 latest_pp_url = "none"
             if normal_update:
+                dcuuid = str(uuid.uuid1())
                 test.append((dcuuid, last_updated, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
-                             response, last_urls, last_ids, offset, artistname, folderid, inverse, hybrid, mature))
+                              last_urls, last_ids, offset, artistname, folderid, inverse, hybrid, mature))
                 print(test[0])
             if check_only:
                 checks.append((timestr, artistname, folderid))
             if has_hybrid:
-                if check_only:
-                    hybridOnly.append((timestr, gathered_hybrids["ids"], gathered_hybrids["urls"],
-                                       gathered_hybrids["img-urls"], artistname,  folderid, hybrid, inverse, mature))
-                else:
-                    hybridCommits.append((dcuuid, last_updated, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
-                             response, last_urls, last_ids, offset, gathered_hybrids["ids"], gathered_hybrids["urls"],
-                                          gathered_hybrids["img-urls"], artistname, folderid, hybrid, inverse, mature))
-        if not len(checks) == 0:
-            psycopg2.extras.execute_values(cursor, check_sql, checks)
+                dcuuid = str(uuid.uuid1())
+                hybridCommits.append((dcuuid, last_updated, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
+                         last_urls, last_ids, offset, gathered_hybrids["ids"], gathered_hybrids["urls"],
+                                      gathered_hybrids["img-urls"], artistname, folderid, hybrid, inverse, mature))
         print("checks " + str(len(checks)))
         if not len(test) == 0:
             psycopg2.extras.execute_values(cursor, change_sql, test)
@@ -268,9 +258,9 @@ def updateallfolders(cursor, con, data, clientToken):
     change_sql = """ UPDATE deviantcord.deviation_data_all
                  SET dc_uuid = data.dcuuid, last_update = data.last_update, last_check = data.last_check, 
                  latest_img_urls = data.latest_img_url::text[], latest_pp_url = data.latest_pp_url,
-                 latest_deviation_url = data.latest_deviation_url,  response = data.response, last_urls = data.last_urls::text[],
+                 latest_deviation_url = data.latest_deviation_url, last_urls = data.last_urls::text[],
                   last_ids = data.last_ids::text[] FROM (VALUES %s) AS data(dcuuid, last_update, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
-                             response, last_urls, last_ids, artist, mature)
+                            last_urls, last_ids, artist, mature)
                  WHERE deviantcord.deviation_data_all.artist = data.artist AND deviantcord.deviation_data_all.mature = data.mature"""
     deviantlogger = logging.getLogger("deviantcog")
     updates = []
@@ -283,19 +273,24 @@ def updateallfolders(cursor, con, data, clientToken):
     try:
         debug_index = 0
         for row in data:
+            # Close any lingering cursors and commit transactions before starting new ones
+            if cursor.statusmessage:
+                cursor.close()
+                con.commit()
+                cursor = con.cursor()
+                
             hybridResponse = None
             check_only = False
             normal_update = True
             has_hybrid = False
             new_uuid = str(uuid.uuid1())
-            artistname = row[0]
-            dc_uuid = row[1]
-            last_updated = row[2]
-            last_check = row[3]
-            latest_img_url = row[4]
-            latest_pp_url = row[5]
-            latest_deviation_url = row[6]
-            response = row[7]
+            artistname = row[1]
+            dc_uuid = row[2]
+            last_updated = row[3]
+            last_check = row[4]
+            latest_img_url = row[5]
+            latest_pp_url = row[6]
+            latest_deviation_url = row[7]
             mature = row[8]
             last_urls = row[9]
             last_ids = row[10]
@@ -312,24 +307,38 @@ def updateallfolders(cursor, con, data, clientToken):
                 else:
                     latest_pp_url = da_response["results"][0]["author"]["usericon"]
                 updates.append((new_uuid, last_updated, last_check, gathered_allfolders["img-urls"], latest_pp_url, latest_deviation_url,
-                             response, gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
+                             gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
             elif len(gathered_allfolders["deviation-ids"]) == 0 or not da_response["results"][0]["deviationid"] == last_ids[0]:
                 if latest_pp_url is None:
                     latest_pp_url = 'none'
                 else:
                     latest_pp_url = da_response["results"][0]["author"]["usericon"]
                 updates.append((new_uuid, last_updated, last_check, gathered_allfolders["img-urls"], latest_pp_url, latest_deviation_url,
-                             response, gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
+                            gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
             else:
                 checks.append((last_check, artistname, mature))
             debug_index = debug_index + 1
 
-        if not len(checks) == 0:
+            # Batch process updates more frequently to avoid long-running transactions
+            if len(updates) >= 100:  # Process in batches of 100
+                if len(checks) > 0:
+                    psycopg2.extras.execute_values(cursor, check_sql, checks)
+                    checks = []
+                if len(updates) > 0:
+                    psycopg2.extras.execute_values(cursor, change_sql, updates)
+                    updates = []
+                con.commit()
+
+        # Process any remaining updates
+        if len(checks) > 0:
             psycopg2.extras.execute_values(cursor, check_sql, checks)
-        if not len(updates) == 0:
+        if len(updates) > 0:
             psycopg2.extras.execute_values(cursor, change_sql, updates)
-        print("checks " + str(len(checks)))
+        con.commit()
+
     except Exception as e:
+        # Make sure to rollback on error
+        con.rollback()
         deviantlogger.exception(e)
         capture_exception(e)
         print("Uh oh, an exception has occured!")
@@ -344,6 +353,10 @@ def updateallfolders(cursor, con, data, clientToken):
                 )
                 textSent = True
         print(e)
+    finally:
+        # Ensure cursor is closed
+        if not cursor.closed:
+            cursor.close()
 
 def verifySourceExistance(artist, folder, inverse, hybrid, mature, conn):
     sql = grab_sql("verify_source_exists")

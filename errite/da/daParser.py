@@ -1,7 +1,7 @@
 """
 
-    DeviantCord 2 Discord Bot
-    Copyright (C) 2020  Errite Games LLC/ ErriteEpticRikez
+    Deviant-DBS
+    Copyright (C) 2020-2024  Errite Softworks LLC/ ErriteEpticRikez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -170,6 +170,17 @@ def getAllFolderArrayResponse(artist,bool, accesstoken, offset):
         data = json.loads(url.read().decode())
         return data;
 
+def getUserStatusesResponse(artist:str, accessToken:str, offset:str):
+    user_agent = {'user-agent': 'DeviantCord 3.0 DBS'}
+    retries = Retry(connect=5, read=5, redirect=5, backoff_factor=4)
+    folderRequestURL = "https://www.deviantart.com/api/v1/oauth2/user/statuses/ " + "?username=" + artist +\
+                       "&access_token=" + accessToken + "&limit=10" + "&offset=" + str(offset)
+    http = PoolManager(retries=retries, headers=user_agent)
+    urllib3.disable_warnings()
+    heroes = http.request('GET', folderRequestURL)
+    data = json.loads(heroes.data.decode('UTF-8'))
+    return data
+
 
 def getGalleryFolderArrayResponse(artist, bool, folder, accesstoken, offset):
     """
@@ -277,7 +288,7 @@ def getJournalResponse(artist, accesstoken, featuredonly, mature):
             :type mature: int
             :return: array
     """
-    requestURL = "https://www.deviantart.com/api/v1/oauth2/browse/user/journals?access_token=" + accesstoken + "&username=" \
+    requestURL = "https://www.deviantart.com/api/v1/oauth2/user/profile/posts?access_token=" + accesstoken + "&username=" \
                  + artist + "&featured=" + str(featuredonly) + "&mature_content=" + str(mature)
     with urllib.request.urlopen(requestURL) as url:
         data = json.loads(url.read().decode())

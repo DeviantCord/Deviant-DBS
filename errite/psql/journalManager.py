@@ -3,11 +3,14 @@ import json
 import uuid
 
 import psycopg2
+from aio_pika.pool import Pool
 
+from errite.models.JournalNotification import JournalNotification
 from errite.psql.sqlManager import grab_sql
 from errite.tools.mis import gatherJournal, createJournalInfoList
 from errite.da.daParser import getJournalResponse
 from errite.da.datools import determineNewJournals
+from errite.io.failedTask import writeFailedTaskJson
 
 
 def addjournalsource(daresponse, artist, conn, mature, dcuuid = str(uuid.uuid1())):
@@ -113,7 +116,6 @@ def updateJournals(conn, clienttoken):
             if not journalResponse["results"][0]["deviationid"] == last_ids[0]:
                 infoList = createJournalInfoList(journalResponse["results"])
                 timestr = datetime.datetime.now()
-
                 sql = grab_sql("journal_source_change")
                 journalCommits.append((dcuuid, timestr, timestr, infoList["thumbnails-img-urls"], infoList["profilepic"],
                                        infoList["journal-urls"][0],json.dumps(journalResponse), infoList["journal-urls"],
@@ -137,7 +139,7 @@ def updateJournals(conn, clienttoken):
 
 
 
-def syncJournals(conn):
+def syncJournals(conn, givenPool: Pool):
     changeCommits = []
     notificationCommits = []
     source_cursor = conn.cursor()
@@ -185,18 +187,33 @@ def syncJournals(conn):
                 try:
                     changeCommits.append((new_dccuid, timestr, obt_source_last_ids, artist, serverid, channelid))
                 except Exception as Ex:
-                    print("Exception")
+                    print("An exception has occurred!")
+                    print(Ex)
                 while not index == new_deviations:
                     timestr = str(datetime.datetime.now())
-                    notificationCommits.append((channelid, artist, latest_pp, obt_source_last_titles[index],obt_source_last_urls[index],obt_source_thumb_img_url[index], timestr, mature))
+                    newNotif:JournalNotification = JournalNotification(
+                        channelid, artist, latest_pp, obt_source_last_titles[index], obt_source_last_urls[index],
+                    obt_source_thumb_img_url[index], timestr, mature)
+                    notificationCommits.append(newNotif)
                     index = index + 1
                 post_notif_sql = grab_sql("add_journal_notification")
-                try:
-                    psycopg2.extras.execute_values(write_cursor, change_sql, changeCommits)
-                    psycopg2.extras.execute_values(write_cursor, post_notif_sql, notificationCommits)
-                except Exception as EX2:
-                    print("Exception")
+                failed_notifications = []
+                psycopg2.extras.execute_values(write_cursor, change_sql, changeCommits)
                 conn.commit()
+                for notification in changeCommits:
+                    try:
+                        notification.sendNotification(givenPool)
+                    except ConnectionError as conEx:
+                        failed_notifications.append(notification)
+                    except Exception as commonEx:
+                        failed_notifications.append(notification)
+                if len(failed_notifications) > 0:
+                    failed_journal_dict = {}
+                    failed_journal_dict["failure_type"] = "journal"
+                    failed_journal_dict["failed_entries"] = failed_notifications
+                    failed_journal_json = json.dump(failed_journal_dict)
+                    writeFailedTaskJson(failed_journal_json)
+
             else:
                 print("Skipped")
 

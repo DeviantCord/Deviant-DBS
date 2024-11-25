@@ -1,9 +1,15 @@
 {
     "client": "discord-server-name",
-    "sentry-url": "sentryurlhere",
-    "sentry-enabled": true,
-    "shard-type": "set shard type here",
+    "sentry-url": "ingesturl",
+    "ban-channel": 0,
+    "ban-notification-channel": 0
+    "sentry-enabled": false,
+    "support-notify-toggle": true,
+    "support-notify": 0,
+    "shard-type": "listeners",
     "shard-id": "1",
     "logging": true,
+    "roleid": 0,
+    "rolesetup-enabled": false,
     "version": "bt-1.2.5"
 }

@@ -1,7 +1,7 @@
 """
 
-    DeviantCord 2 Discord Bot
-    Copyright (C) 2020  Errite Games LLC/ ErriteEpticRikez
+    Deviant-DBS
+    Copyright (C) 2020-2024  Errite Softworks LLC/ ErriteEpticRikez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -20,6 +20,8 @@
 """
 import json
 import logging
+import traceback
+
 
 def createConfig():
     logger = logging.getLogger('errite.config.configManager')
@@ -75,4 +77,29 @@ def createSensitiveConfig():
             return True;
     except IOError:
         print("ERROR: Experienced IO Error when creating client.json")
-        return False;f
+        return False;
+
+def createRabbitConfig():
+    logger = logging.getLogger('errite.config.configManager')
+    try:
+        print("configManager: Creating rabbit.json")
+        config = open("rabbit.json", "a+")
+        print("configManager: Writing to rabbit.json")
+        config.write("{\n}")
+        config.close()
+        with open("rabbit.json", "r") as jsonFile:
+            configdata = json.load(jsonFile)
+            jsonFile.close()
+            configdata["Username"] = "usernamehere"
+            configdata["Password"] = "passwordhere"
+            configdata["Hostname"] = "hosthere"
+            configdata["queue"] = "queuenamehere"
+            configdata["port"] = "port"
+            configdata["retry-delay"] = 25.5
+            jsonFile = open("rabbit.json", "w+")
+            jsonFile.write(json.dumps(configdata, indent=4, sort_keys=True))
+            jsonFile.close()
+            return True;
+    except IOError as ex:
+        print("ERROR: Experienced IO Error when creating rabbit.json")
+        return False;

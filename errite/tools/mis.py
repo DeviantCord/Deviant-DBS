@@ -1,7 +1,7 @@
 """
 
-    DeviantCord 2 Discord Bot
-    Copyright (C) 2020  Errite Games LLC/ ErriteEpticRikez
+    Deviant-DBS
+    Copyright (C) 2020-2024  Errite Softworks LLC/ ErriteEpticRikez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -18,6 +18,7 @@
 
 
 """
+import os
 from errite.da.jsonTools import findDuplicateElementArray
 from markdownify import markdownify as md
 
@@ -32,6 +33,20 @@ def enumerateAllID(data):
     for entry in data:
         gathered_id.append(entry)
     return gathered_id
+
+def findFileName(partialFileName:str) -> str:
+    found:bool = False
+    id = 1
+    fileName = partialFileName + "-" + str(id)
+    while not found:
+        fileName = partialFileName + "-" + str(id)
+        if os.path.exists(fileName):
+            found = True
+        else:
+            id = id + 1
+    return fileName
+
+
 def checkHybridResources(da_data, artdata):
     data_resources = {}
     data_resources["all-hybrids"] = []
@@ -56,6 +71,7 @@ def checkHybridResources(da_data, artdata):
             data_resources["all-hybrid-urls"].append(entry["url"])
             data_resources["all-hybrid-img-urls"].append(entry["content"]["src"])
     return data_resources
+
 
 def gatherJournal(data):
     data_resources = {}
@@ -130,6 +146,44 @@ def gatherGalleryFolderResources(data):
 
     return data_resources
 
+def createStatusInfoList(data):
+    data_resources = {}
+    data_resources["profilepic"] = "none"
+    data_resources["status-ids"] = []
+    data_resources["thumbnails-img-urls"] = []
+    #Thumbnail ID's contains the deviation-id's that have thumbnails.
+    data_resources["thumbnail-ids"] = []
+    data_resources["status-urls"] = []
+    data_resources["excerpts"] = []
+
+    if not len(data) == 0:
+        data_resources["profilepic"] = data[0]["author"]["usericon"]
+    for entry in data:
+        data_resources["status-ids"].append(entry["status-id"])
+        data_resources["excerpts"].append(entry["body"])
+        data_resources["status-urls"].append(entry["url"])
+        try:
+            deviationType:str = entry["items"]["type"]
+            if not deviationType.lower() == "thumb_background_deviation":
+                raise Exception("DeviantArt gave an unexpected deviationType. Type given: " + deviationType)
+            else:
+                try:
+                    data_resources["thumbnail-ids"].append(entry["items"]["deviation"]["deviationid"])
+                    try:
+                        data_resources["thumbnails-img-urls"].append(entry["items"]["deviation"]["preview"]["src"])
+                    except:
+                        data_resources["thumbnail-ids"].pop()
+                        data_resources["thumbnail-ids"].append("none")
+                        data_resources["thumbnails-img-urls"].append("none")
+                except KeyError:
+                    data_resources["thumbnail-ids"].append("none")
+                    data_resources["thumbnails-img-urls"].append("none")
+        except KeyError:
+            data_resources["thumbnail-ids"].append("none")
+            data_resources["thumbnails-img-urls"].append("none")
+    return data_resources
+
+
 def createJournalInfoList(data):
     """
                 Method ran to compile needed journal data for the database into a dictionary the specified artist using deviantart's API.
@@ -164,6 +218,7 @@ def createJournalInfoList(data):
             data_resources["thumbnails-img-urls"].append("none")
         data_resources["excerpts"].append(entry["excerpt"])
     return data_resources
+
 
 
 

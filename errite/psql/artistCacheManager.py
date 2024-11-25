@@ -9,8 +9,8 @@ import datetime
 
 def sync_artists(db_conn, da_token:str, rpool):
     update_sql = """UPDATE deviantcord.artist_info
-                        SET artist = data.artist, artist_picture_url = data.artist_picture_url, last_updated = data.last_updated
-                        FROM (VALUES %s) AS data(artist, artist_picture_url, last_updated, cond_artist)
+                        SET artist_picture_url = data.artist_picture_url, last_updated = data.last_updated
+                        FROM (VALUES %s) AS data(artist_picture_url, last_updated, cond_artist)
                         WHERE deviantcord.artist_info.artist = data.cond_artist """
     sql = """SELECT * FROM deviantcord.artist_info"""
     db_updates = []
@@ -40,7 +40,7 @@ def sync_artists(db_conn, da_token:str, rpool):
             if not obt_artistname.upper() == ext_userinfo["username"].upper() or not obt_artistpic == ext_userinfo["user_pic"]:
                 apply_updates = True
             if apply_updates:
-                db_updates.append((ext_userinfo["username"], ext_userinfo["user_pic"], timestr, obt_artistname))
+                db_updates.append((ext_userinfo["user_pic"], timestr, obt_artistname))
                 redis_updates[ext_userinfo["username"]] = ext_userinfo["user_pic"]
                 updated_redis.append(ext_userinfo["username"])
 

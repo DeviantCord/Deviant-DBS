@@ -1,7 +1,7 @@
 """
 
-    DeviantCord 2 Discord Bot
-    Copyright (C) 2020  Errite Games LLC/ ErriteEpticRikez
+    Deviant-DBS
+    Copyright (C) 2020-2024  Errite Softworks LLC/ ErriteEpticRikez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -18,6 +18,8 @@
 
 
 """
+add_status_notification = """INSERT INTO deviantcord.status_notifications(notification_creation,
+pp_url, url, body, artist, thumbnail, channelid)"""
 add_journal_notification = """ INSERT INTO deviantcord.journal_notifications(channelid, artist, pp_url, title, 
 url, thumbnail, notifcation_creation, mature) VALUES %s """
 cleanup_journal_listener_leave = """DELETE FROM deviantcord.journal_listeners WHERE serverid = %s"""
@@ -52,6 +54,12 @@ grab_journal_source = """SELECT * FROM deviantcord.journal_data"""
 journal_source_check = """ UPDATE deviantcord.journal_data
              SET last_check = data.last_check FROM (VALUES %s) AS data(last_check, artist)
              WHERE deviantcord.journal_data.artist = data.artist"""
+status_source_change = """ UPDATE deviantcord.status_data
+SET dc_uuid = data.dccuid, last_statusid = data.last_statusid, last_itemurls = data.itemurls, last_urls = data.last_urls,
+last_bodys = data.last_bodys, last_pp = data.last_pp, thumb_ids = data.thumb_ids
+WHERE deviantcord.status_data.artist = data.artist
+
+"""
 journal_source_change = """ UPDATE deviantcord.journal_data
              SET dc_uuid = data.dcuuid, latest_update = data.latest_update, last_check = data.last_check, 
              thumb_img_url = data.thumb_img_url::text[], latest_pp = data.latest_pp_url::text,
@@ -71,6 +79,10 @@ update_inverse = """UPDATE deviantcord.deviation_listeners set inverse = %s, dc_
  last_hybrids = %s, last_update = %s  WHERE serverid = %s AND channelid = %s AND folderid =%s AND foldertype = %s;"""
 update_channel = """UPDATE deviantcord.deviation_listeners set channelid = %s WHERE channelid = %s AND foldername = %s AND
 artist = %s"""
+change_status_listener = """UPDATE deviantcord.status_listeners
+SET dc_uuid = data.dcuuid, last_ids = data.last_ids, latest_pp = data.latest_pp FROM (VALUES %s) AS 
+data(dcuuid, last_ids, latest_pp) WHERE deviantcord.status_listeners.artist = data.artist AND 
+deviantcord.journal_listeners.serverid = data.serverid AND deviantcord.journal_listeners.channelid = data.channelid"""
 change_journal_listener = """ UPDATE deviantcord.journal_listeners
                      SET dc_uuid = data.dcuuid, latest_update = data.last_update, 
                     last_ids = data.last_ids::text[] FROM (VALUES %s) AS data(dcuuid, last_update, last_ids, artist, serverid, channelid)
@@ -87,13 +99,22 @@ get_listener = """SELECT * from deviantcord.deviation_listeners WHERE artist = %
  channelid = %s;"""
 grab_source_import = """SELECT * FROM deviantcord.deviation_data WHERE folderid = %s AND inverse_folder = %s AND hybrid = %s
  AND mature = %s;"""
-grab_all_journal_import = """SELECT * FROM deviantcord.journal_data"""
+grab_all_status_updates = """SELECT artist, last_statusid FROM deviantcord.status_data"""
+get_sync_status_updates = """SELECT artist, last_statusid, last_items_urls, last_urls, last_bodys, dc_uuid
+FROM deviantcord.status_data WHERE artist = %s"""
+get_listener_status_updates = """SELECT artist, dc_uuid, last_ids, serverid, channelid FROM deviantcord.status_listeners"""
+grab_all_journal_import = """SELECT artist, last_ids, mature FROM deviantcord.journal_data"""
 grab_all_source_import = """SELECT * FROM deviantcord.deviation_data_all WHERE artist = %s and mature = %s"""
 new_journal_source = """INSERT into deviantcord.journal_data(artist, dc_uuid, latest_title,
  latest_url, latest_excerpt, last_ids, last_check, latest_update, latest_pp, response, mature,
   thumb_img_url, last_urls, last_excerpts, last_titles, thumb_ids) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
 new_journal_listener = """INSERT into deviantcord.journal_listeners(artist, dc_uuid, last_ids, last_check, latest_update, latest_pp, mature, serverid, channelid)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+new_status_source = """INSERT into deviantcord.status_data(artist, dc_uuid,
+ last_statusids, last_item_urls, last_urls, last_bodys, last_update, last_check, latest_pp, thumb_ids) 
+ VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+new_status_listener = """INSERT into deviantcord.status_listeners(artist, dc_uuid, last_ids, last_check, latest_update, latest_pp, serverid, channelid)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
 new_source = """INSERT INTO deviantcord.deviation_data(artist, folder_name, folderid,
                          inverse_folder, dc_uuid, last_update, last_check, latest_img_urls, response, latest_deviation_url,
                          latest_pp_url, mature, last_urls, last_ids, last_hybrid_ids, hybrid, given_offset, hybrid_urls, 
@@ -118,16 +139,20 @@ def grab_sql(sql_title):
         "change_journal_listener": change_journal_listener,
         "delete_notifications": delete_notification_tasks,
         "add_journal_notification": add_journal_notification,
+        "add_status_notification": add_status_notification,
         "delete_listener": delete_listener,
         "delete_journal_notification": delete_journal_notification,
         "delete_journal_listener": delete_journal_listener,
         "cleanup_journal_Listener_leave": cleanup_journal_listener_leave,
+        "change_status_listener": change_status_listener,
         "delete_all_listener": delete_all_listener,
         "delete_server_config": server_leave_config,
         "delete_server_data": server_leave_data,
         "insert_server_info": create_server_info,
         "get_all_journal_listeners": get_all_journal_listeners,
         "get_all_journal_notifications": get_all_journal_notifications,
+        "get_listener_status_updates": get_listener_status_updates,
+        "get_sync_status_updates": get_sync_status_updates,
         "grab_server_info": grab_server_info,
         "grab_server_journals": grab_server_journals,
         "grab_server_listeners": grab_server_listeners,
@@ -145,6 +170,9 @@ def grab_sql(sql_title):
         "journal_source_check": journal_source_check,
         "new_journal_source": new_journal_source,
         "new_journal_listener": new_journal_listener,
+        "status_source_change": status_source_change,
+        "new_status_source": new_status_source,
+        "new_status_listener": new_status_listener,
         "update_rank": update_rank,
         "update_prefix": update_prefix,
         "update_hybrid": update_hybrid,
