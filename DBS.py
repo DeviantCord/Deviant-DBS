@@ -184,12 +184,12 @@ async def main():
                 get_cursor.execute(get_query,(shard_id,))
                 obt_results = get_cursor.fetchall()
                 source_cursor = db_connection.cursor()
-                updateSources(source_cursor, db_connection, obt_results, token)
+                updateSources(db_connection, obt_results, token)
                 db_connection.commit()
                 get_query = "SELECT * from deviantcord.deviation_data_all WHERE NOT disabled = true AND shard_id = %s;"
                 get_cursor.execute(get_query,(shard_id,))
                 obt_results = get_cursor.fetchall()
-                updateallfolders(source_cursor, db_connection, obt_results, token)
+                updateallfolders(db_connection, obt_results, token)
             elif shard_type.lower() == "listeners":
                 await syncListeners(db_connection, clientsecret, clientid, shard_id, channel_pool)
             elif shard_type.lower() == "journals":
