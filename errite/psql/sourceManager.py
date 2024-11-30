@@ -30,7 +30,9 @@ from errite.da.datools import determineNewDeviations
 from errite.tools.mis import gatherGalleryFolderResources, createIDURLList
 from errite.psql.sqlManager import grab_sql
 from twilio.rest import Client
-def updateSources(cursor, con, data, clientToken):
+
+
+def updateSources(con, data, clientToken):
     check_sql = """ UPDATE deviantcord.deviation_data
                  SET last_check = data.last_check FROM (VALUES %s) AS data(last_check, artist, folderid)
                  WHERE deviantcord.deviation_data.artist = data.artist AND deviantcord.deviation_data.folderid = data.folderid"""
@@ -68,16 +70,10 @@ def updateSources(cursor, con, data, clientToken):
     checks = []
     hybridCommits = []
     hybridOnly = []
-    gathered_hybrids = None
-    deviantlogger = logging.getLogger("deviantcog")
-    textSent = False
-    twilioData = None
-    with open("twilio.json","r") as twilioJson:
-        twilioData = json.load(twilioJson)
-        twilioJson.close()
+    batch_size = 100
+    cursor = con.cursor()
     try:
         for row in data:
-
             check_only = False
             normal_update = True
             has_hybrid = False
@@ -224,34 +220,38 @@ def updateSources(cursor, con, data, clientToken):
                 hybridCommits.append((dcuuid, last_updated, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
                          last_urls, last_ids, offset, gathered_hybrids["ids"], gathered_hybrids["urls"],
                                       gathered_hybrids["img-urls"], artistname, folderid, hybrid, inverse, mature))
+            if len(test) >= batch_size:
+                psycopg2.extras.execute_values(cursor, change_sql, test)
+                test = []
+                con.commit()
+            if len(checks) >= batch_size:
+                psycopg2.extras.execute_values(cursor, check_sql, checks)
+                checks = []
+                con.commit()
+            if len(hybridCommits) >= batch_size:
+                psycopg2.extras.execute_values(cursor, hybrid_change_sql, hybridCommits)
+                hybridCommits = []
+                con.commit()
         print("checks " + str(len(checks)))
         if not len(test) == 0:
             psycopg2.extras.execute_values(cursor, change_sql, test)
+            con.commit()
         if not len(hybridOnly) == 0:
             psycopg2.extras.execute_values(cursor, hybrid_only_sql, hybridOnly)
+            con.commit()
         if not len(hybridCommits) == 0:
-            #HERE
             psycopg2.extras.execute_values(cursor, hybrid_change_sql, hybridCommits)
-                #cursor.execute(
-                 #   change_sql(dcuuid, last_updated, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
-                  #             response, last_urls, last_ids, offset, artistname, folderid))
-                #con.commit()
+            con.commit()
+        cursor.close()
+        
     except Exception as e:
         print("Uh oh, an exception has occured")
         capture_exception(e)
-        client = Client(twilioData["sid"], twilioData["auth_token"])
-        if twilioData["enabled"]:
-            if not textSent:
-                message = client.messages \
-                    .create(
-                    body='DeviantCord Regular Folder Sources seem to be having issues, issues were just reported to Sentry. Check your Sentry Panel',
-                    from_=twilioData["sender"],
-                    to=twilioData["notify"]
-                )
-                textSent = True
+        con.rollback()
+        cursor.close()
         print(e)
 
-def updateallfolders(cursor, con, data, clientToken):
+def updateallfolders(con, data, clientToken):
     check_sql = """ UPDATE deviantcord.deviation_data_all
                  SET last_check = data.last_check FROM (VALUES %s) AS data(last_check, artist, mature)
                  WHERE deviantcord.deviation_data_all.artist = data.artist AND deviantcord.deviation_data_all.mature = data.mature"""
@@ -266,18 +266,10 @@ def updateallfolders(cursor, con, data, clientToken):
     updates = []
     checks = []
     textSent = False
-    twilioData = None
-    with open("twilio.json","r") as twilioJson:
-        twilioData = json.load(twilioJson)
-        twilioJson.close()
+    cursor = con.cursor()
     try:
         debug_index = 0
         for row in data:
-            # Close any lingering cursors and commit transactions before starting new ones
-            if cursor.statusmessage:
-                cursor.close()
-                con.commit()
-                cursor = con.cursor()
                 
             hybridResponse = None
             check_only = False
@@ -323,18 +315,22 @@ def updateallfolders(cursor, con, data, clientToken):
             if len(updates) >= 100:  # Process in batches of 100
                 if len(checks) > 0:
                     psycopg2.extras.execute_values(cursor, check_sql, checks)
+                    con.commit()
                     checks = []
                 if len(updates) > 0:
                     psycopg2.extras.execute_values(cursor, change_sql, updates)
+                    con.commit()
                     updates = []
                 con.commit()
 
         # Process any remaining updates
         if len(checks) > 0:
             psycopg2.extras.execute_values(cursor, check_sql, checks)
+            con.commit()
         if len(updates) > 0:
             psycopg2.extras.execute_values(cursor, change_sql, updates)
-        con.commit()
+            con.commit()
+        cursor.close()
 
     except Exception as e:
         # Make sure to rollback on error
@@ -342,16 +338,6 @@ def updateallfolders(cursor, con, data, clientToken):
         deviantlogger.exception(e)
         capture_exception(e)
         print("Uh oh, an exception has occured!")
-        client = Client(twilioData["sid"], twilioData["auth_token"])
-        if twilioData["enabled"]:
-            if not textSent:
-                message = client.messages \
-                    .create(
-                    body='DeviantCord All Folder Sources seem to be having issues, issues were just reported to Sentry. Check your Sentry Panel',
-                    from_=twilioData["sender"],
-                    to=twilioData["notify"]
-                )
-                textSent = True
         print(e)
     finally:
         # Ensure cursor is closed

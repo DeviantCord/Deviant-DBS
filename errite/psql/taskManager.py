@@ -114,36 +114,81 @@ async def handle_nf_deviation_notifications(discord_commits, normal_commits, hyb
     deviantlogger.info("Discord Commits: " + str(len(discord_commits)))
     deviantlogger.info("Hybrid Commits " + str(len(hybrid_commits)))
     deviantlogger.info("Hybrid Only Commits " + str(len(hybrid_only_commits)))
-    print("Normal ", len(normal_commits))
-    print("Discord_commits ", len(discord_commits))
-    print("Hybrid Commits ", len(hybrid_commits))
-    print("Hybrid Only ", len(hybrid_only_commits))
+    
     failed_notifications = []
     temp_cursor = db_conn.cursor()
-    if not len(normal_commits) == 0:
-        psycopg2.extras.execute_values(temp_cursor, change_sql, normal_commits)
-    if not len(hybrid_commits) == 0:
-        psycopg2.extras.execute_values(temp_cursor, change_hybrid_sql, hybrid_commits)
-    if not len(hybrid_only_commits) == 0:
-        psycopg2.extras.execute_values(temp_cursor, change_hybrid_only_sql, hybrid_only_commits)
+    discord_batch = []
+    
+    try:
+        if temp_cursor.statusmessage:
+            temp_cursor.close()
+            db_conn.commit()
+            temp_cursor = db_conn.cursor()
+        # Process normal commits when they reach batch size
+        if len(normal_commits) >= 100:
+            psycopg2.extras.execute_values(temp_cursor, change_sql, normal_commits)
+            db_conn.commit()
+            normal_commits = []
 
-    if not len(discord_commits) == 0:
+        # Process hybrid commits when they reach batch size
+        if len(hybrid_commits) >= 100:
+            psycopg2.extras.execute_values(temp_cursor, change_hybrid_sql, hybrid_commits)
+            db_conn.commit()
+            hybrid_commits = []
+
+        # Process hybrid only commits when they reach batch size
+        if len(hybrid_only_commits) >= 100:
+            psycopg2.extras.execute_values(temp_cursor, change_hybrid_only_sql, hybrid_only_commits)
+            db_conn.commit()
+            hybrid_only_commits = []
+
+        # Process any remaining commits
+        if normal_commits:
+            psycopg2.extras.execute_values(temp_cursor, change_sql, normal_commits)
+        if hybrid_commits:
+            psycopg2.extras.execute_values(temp_cursor, change_hybrid_sql, hybrid_commits)
+        if hybrid_only_commits:
+            psycopg2.extras.execute_values(temp_cursor, change_hybrid_only_sql, hybrid_only_commits)
+
+        # Process discord notifications in batches
         for notification in discord_commits:
+            discord_batch.append(notification)
+            if len(discord_batch) >= 100:
+                for batch_notification in discord_batch:
+                    try:
+                        await batch_notification.sendNotification(givenPool)
+                    except (ConnectionError, Exception) as ex:
+                        failed_notifications.append(batch_notification)
+                        if isinstance(ex, Exception):
+                            capture_exception(ex)
+                discord_batch = []
+
+        # Process any remaining discord notifications
+        for notification in discord_batch:
             try:
                 await notification.sendNotification(givenPool)
-            except ConnectionError as conEx:
+            except (ConnectionError, Exception) as ex:
                 failed_notifications.append(notification)
-            except Exception as commonEx:
-                failed_notifications.append(notification)
-    if not len(failed_notifications) == 0:
-        #TODO Add JSON file saving
-        with open(findFileName("notification-failover"), "w+") as failedNotificationFile:
-            failedNotificationFile.write(json.dumps(failed_notifications))
-            failedNotificationFile.close()
-    deviantlogger.info("Committing transactions to DB")
-    db_conn.commit()
-    deviantlogger.info("Transactions committed.")
-    temp_cursor.close()
+                if isinstance(ex, Exception):
+                    capture_exception(ex)
+
+        if failed_notifications:
+            with open(findFileName("notification-failover"), "w+") as failedNotificationFile:
+                failedNotificationFile.write(json.dumps(failed_notifications))
+
+        # Final commit for any remaining transactions
+        db_conn.commit()
+
+    except Exception as e:
+        db_conn.rollback()
+        deviantlogger.exception(e)
+        capture_exception(e)
+        raise
+    finally:
+        if not temp_cursor.closed:
+            temp_cursor.close()
+
+    deviantlogger.info("All transactions committed successfully")
 
 def create_nf_deviation_notifications(new_deviation_count, new_hybrid_count, artist, foldername, mature, isGroup, folderid, serverid, channel_id, obt_dcuuid, obt_last_urls, obt_img_urls, obt_pp, inverse, discord_commits, obt_hybrid_urls, obt_hybrid_img_urls, obt_hybrid_ids):
     # Create notifications for new deviations. This method does not create notifications as a result of a catchup event. 
@@ -300,7 +345,7 @@ def handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, f
     return commits['hybrid'], commits['normal'], commits['hybrid_only'], commits['discord_commits'], commits['data_resources']
 
 
-async def syncListeners(conn, task_cursor, source_cursor, deviant_secret, deviant_id, shard_id, givenPool: Pool):
+async def syncListeners(conn,deviant_secret, deviant_id, shard_id, givenPool: Pool):
     """
         Method ran grab SQL queries from sqlManager.
 
@@ -326,6 +371,8 @@ async def syncListeners(conn, task_cursor, source_cursor, deviant_secret, devian
     source_get_all_sql = """SELECT * from deviantcord.deviation_data_all where artist = %s AND mature = %s"""
     task_get_sql = "select * from deviantcord.deviation_listeners where disabled = false AND shard_id = %s"
     deviantlogger = logging.getLogger("deviantcog")
+    task_cursor = conn.cursor()
+    source_cursor = conn.cursor()
     task_cursor.execute(task_get_sql,(shard_id,))
     obt = task_cursor.fetchall()
     obt_token = dp.getToken(deviant_secret, deviant_id)
@@ -337,6 +384,10 @@ async def syncListeners(conn, task_cursor, source_cursor, deviant_secret, devian
 
     for data in obt:
         try:
+            if task_cursor.statusmessage:
+                task_cursor.close()
+                conn.commit()
+                task_cursor = conn.cursor()
             timestr = datetime.datetime.now()
             all_folder_commits = []
             hybrid_commits = []
@@ -448,7 +499,6 @@ async def syncListeners(conn, task_cursor, source_cursor, deviant_secret, devian
                                 failed_notifications.append(notification)
                                 capture_exception(commonEx)
                     if not len(failed_notifications) == 0:
-                        #TODO fix this
                         with open(findFileName("notification-failover"), "w+") as failedNotificationFile:
                             failedNotificationFile.write(json.dumps(failedNotificationFile))
                             failedNotificationFile.close()
@@ -460,6 +510,11 @@ async def syncListeners(conn, task_cursor, source_cursor, deviant_secret, devian
         except Exception as e:
             capture_exception(e)
             print(e)
+            conn.rollback()
+    if task_cursor and not task_cursor.closed:
+        task_cursor.close()
+    if source_cursor and not source_cursor.closed:
+        source_cursor.close()
 
 
 def importFailedNotifications(conn, givenPool: Pool):

@@ -32,7 +32,7 @@ from errite.rabbit.rabbitManager import build_url
 from errite.tools.startupTools import checkStartUpFiles
 import urllib
 
-print("DeviantCord DBS V2.0.1")
+print("DeviantCord DBS V2.0.2")
 print("Developed by Errite Softworks LLC")
 clientid = None
 db_connection = None
@@ -110,7 +110,7 @@ async def main():
                         # of transactions for performance monitoring.
                         # We recommend adjusting this value in production.
                         traces_sample_rate=1.0,
-                        release="deviant-dbs@dev-2.0.0"
+                        release="deviant-dbs@2.0.1"
                     )
                 sensitiveData = json.load(clientjsonFile)
                 configjsonFile.close()
@@ -191,9 +191,7 @@ async def main():
                 obt_results = get_cursor.fetchall()
                 updateallfolders(source_cursor, db_connection, obt_results, token)
             elif shard_type.lower() == "listeners":
-                source_cursor = db_connection.cursor()
-                task_cursor = db_connection.cursor()
-                await syncListeners(db_connection, task_cursor, source_cursor, clientsecret, clientid, shard_id, channel_pool)
+                await syncListeners(db_connection, clientsecret, clientid, shard_id, channel_pool)
             elif shard_type.lower() == "journals":
                 updateJournals(db_connection, token)
                 syncJournals(db_connection)

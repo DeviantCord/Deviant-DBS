@@ -4,6 +4,7 @@ import uuid
 
 import psycopg2
 from aio_pika.pool import Pool
+from sentry_sdk import capture_exception
 
 from errite.models.JournalNotification import JournalNotification
 from errite.psql.sqlManager import grab_sql
@@ -87,57 +88,92 @@ def verifyListenerJournalExists(conn, artist, mature):
 def updateJournals(conn, clienttoken):
     get_sources = grab_sql("grab_all_source_journals")
     read_cursor = conn.cursor()
+    write_cursor = conn.cursor()
     read_cursor.execute(get_sources)
     obt_results = read_cursor.fetchall()
     journal_change_sql = grab_sql("journal_source_change")
     journal_check_sql = grab_sql("journal_source_check")
     journalCommits = []
     journalCheck = []
-    for row in obt_results:
-        artist = row[0]
-        dcuuid = row[1]
-        latest_title = row[2]
-        latest_url = row[3]
-        latest_excerpt = row[4]
-        last_ids = row[5]
-        last_check = row[6]
-        latest_update = row[7]
-        latest_pp = row[8]
-        response = row[9]
-        mature = row[10]
-        thumb_img_url = row[11]
-        last_urls = row[12]
-        last_excerpts = row[13]
-        last_titles = row[14]
-        dcuuid = str(uuid.uuid1())
+    
+    try:
+        for row in obt_results:
+            artist = row[0]
+            dcuuid = row[1]
+            latest_title = row[2]
+            latest_url = row[3]
+            latest_excerpt = row[4]
+            last_ids = row[5]
+            last_check = row[6]
+            latest_update = row[7]
+            latest_pp = row[8]
+            response = row[9]
+            mature = row[10]
+            thumb_img_url = row[11]
+            last_urls = row[12]
+            last_excerpts = row[13]
+            last_titles = row[14]
+            dcuuid = str(uuid.uuid1())
 
-        journalResponse = getJournalResponse(artist,clienttoken, False, mature)
-        if not len(journalResponse["results"]) == 0:
-            if not journalResponse["results"][0]["deviationid"] == last_ids[0]:
-                infoList = createJournalInfoList(journalResponse["results"])
-                timestr = datetime.datetime.now()
-                sql = grab_sql("journal_source_change")
-                journalCommits.append((dcuuid, timestr, timestr, infoList["thumbnails-img-urls"], infoList["profilepic"],
-                                       infoList["journal-urls"][0],json.dumps(journalResponse), infoList["journal-urls"],
-                                      infoList["deviation-ids"], infoList["titles"], infoList["thumbnail-ids"], infoList["thumbnail-ids"],
-                                      infoList["excerpts"], artist, mature))
+            journalResponse = getJournalResponse(artist, clienttoken, False, mature)
+            if not len(journalResponse["results"]) == 0:
+                if not journalResponse["results"][0]["deviationid"] == last_ids[0]:
+                    infoList = createJournalInfoList(journalResponse["results"])
+                    timestr = datetime.datetime.now()
+                    journalCommits.append((dcuuid, timestr, timestr, infoList["thumbnails-img-urls"], infoList["profilepic"],
+                                       infoList["journal-urls"][0], json.dumps(journalResponse), infoList["journal-urls"],
+                                       infoList["deviation-ids"], infoList["titles"], infoList["thumbnail-ids"], 
+                                       infoList["thumbnail-ids"], infoList["excerpts"], artist, mature))
+                    
+                    # Process journal commits when they reach batch size
+                    if len(journalCommits) >= 100:
+                        psycopg2.extras.execute_values(write_cursor, journal_change_sql, journalCommits)
+                        conn.commit()
+                        journalCommits = []
+                else:
+                    timestr = datetime.datetime.now()
+                    journalCheck.append((timestr, artist))
+                    
+                    # Process journal checks when they reach batch size
+                    if len(journalCheck) >= 100:
+                        psycopg2.extras.execute_values(write_cursor, journal_check_sql, journalCheck)
+                        conn.commit()
+                        journalCheck = []
             else:
                 timestr = datetime.datetime.now()
                 journalCheck.append((timestr, artist))
-        else:
-            timestr = datetime.datetime.now()
-            journalCheck.append((timestr, artist))
-    temp_cursor = conn.cursor()
-    if not len(journalCommits ) == 0:
-        psycopg2.extras.execute_values(temp_cursor, journal_change_sql, journalCommits)
-    if not len(journalCheck) == 0:
-        try:
-            psycopg2.extras.execute_values(temp_cursor, journal_check_sql, journalCheck)
-        except Exception as ex:
-            print("Exception")
+                
+                # Process journal checks when they reach batch size
+                if len(journalCheck) >= 100:
+                    psycopg2.extras.execute_values(write_cursor, journal_check_sql, journalCheck)
+                    conn.commit()
+                    journalCheck = []
 
+        # Process any remaining commits
+        if journalCommits:
+            psycopg2.extras.execute_values(write_cursor, journal_change_sql, journalCommits)
+            conn.commit()
+            
+        if journalCheck:
+            try:
+                psycopg2.extras.execute_values(write_cursor, journal_check_sql, journalCheck)
+                conn.commit()
+            except Exception as ex:
+                capture_exception(ex)
+                print("Found exception " + str(ex))
+                raise
 
+    except Exception as e:
+        conn.rollback()
+        print("An error occurred:", e)
+        raise
+    finally:
+        if not read_cursor.closed:
+            read_cursor.close()
+        if not write_cursor.closed:
+            write_cursor.close()
 
+    print("Finished updateJournals!")
 
 def syncJournals(conn, givenPool: Pool):
     changeCommits = []
@@ -187,8 +223,8 @@ def syncJournals(conn, givenPool: Pool):
                 try:
                     changeCommits.append((new_dccuid, timestr, obt_source_last_ids, artist, serverid, channelid))
                 except Exception as Ex:
+                    capture_exception(Ex)
                     print("An exception has occurred!")
-                    print(Ex)
                 while not index == new_deviations:
                     timestr = str(datetime.datetime.now())
                     newNotif:JournalNotification = JournalNotification(
@@ -216,6 +252,9 @@ def syncJournals(conn, givenPool: Pool):
 
             else:
                 print("Skipped")
+    source_cursor.close()
+    journal_cursor.close()
+    write_cursor.close()
 
 
     print("Finished syncJournals!")
