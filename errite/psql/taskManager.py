@@ -125,19 +125,19 @@ async def handle_nf_deviation_notifications(discord_commits, normal_commits, hyb
             db_conn.commit()
             temp_cursor = db_conn.cursor()
         # Process normal commits when they reach batch size
-        if len(normal_commits) >= 100:
+        if len(normal_commits) >= 5:
             psycopg2.extras.execute_values(temp_cursor, change_sql, normal_commits)
             db_conn.commit()
             normal_commits = []
 
         # Process hybrid commits when they reach batch size
-        if len(hybrid_commits) >= 100:
+        if len(hybrid_commits) >= 5:
             psycopg2.extras.execute_values(temp_cursor, change_hybrid_sql, hybrid_commits)
             db_conn.commit()
             hybrid_commits = []
 
         # Process hybrid only commits when they reach batch size
-        if len(hybrid_only_commits) >= 100:
+        if len(hybrid_only_commits) >= 5:
             psycopg2.extras.execute_values(temp_cursor, change_hybrid_only_sql, hybrid_only_commits)
             db_conn.commit()
             hybrid_only_commits = []
@@ -153,7 +153,7 @@ async def handle_nf_deviation_notifications(discord_commits, normal_commits, hyb
         # Process discord notifications in batches
         for notification in discord_commits:
             discord_batch.append(notification)
-            if len(discord_batch) >= 100:
+            if len(discord_batch) >= 5:
                 for batch_notification in discord_batch:
                     try:
                         await batch_notification.sendNotification(givenPool)

@@ -77,27 +77,28 @@ def updateSources(con, data, clientToken):
             check_only = False
             normal_update = True
             has_hybrid = False
-            foldername = row[1]
-            artistname = row[0]
+            foldername = row[2]
+            artistname = row[1]
+
             print("Trying artist " + artistname + " in folder " + foldername)
-            folderid = row[2]
-            inverse = row[3]
-            dc_uuid = row[4]
-            last_updated = row[5]
-            last_check = row[6]
-            latest_img_url = row[7]
-            latest_pp_url = row[8]
-            latest_deviation_url = row[9]
-            mature = row[10]
-            last_urls = row[11]
-            last_ids = row[12]
-            last_hybrids = row[13]
-            hybrid = row[14]
-            offset = row[15]
+            folderid = row[3]
+            inverse = row[4]
+            dc_uuid = row[5]
+            last_updated = row[6]
+            last_check = row[7]
+            latest_img_url = row[8]
+            latest_pp_url = row[9]
+            latest_deviation_url = row[10]
+            mature = row[11]
+            last_urls = row[12]
+            last_ids = row[13]
+            last_hybrids = row[14]
+            hybrid = row[15]
+            offset = row[16]
             timestr = datetime.datetime.now()
             didCatchup = False
 
-            deviantlogger.info("Normal Checking artist: " + artistname + " in folder " + foldername + " inverse: " +
+            print("Normal Checking artist: " + artistname + " in folder " + foldername + " inverse: " +
                                str(inverse) +
                                " hybrid: " + str(hybrid) + " mature " + str(mature) + " offset " + str(offset))
             if inverse:
@@ -286,9 +287,12 @@ def updateallfolders(con, data, clientToken):
             mature = row[8]
             last_urls = row[9]
             last_ids = row[10]
-            timestr = datetime.datetime.now()
+            new_check_timestamp = datetime.datetime.now()
+            new_update_timestamp = datetime.datetime.now()
             deviantlogger.info("Checking artist: " + artistname + " mature " + str(mature))
             #Its always 0 since new deviations for all folders are only posted on the top
+            if artistname.lower() == "ibp-8":
+                print("DEBUG CONDITION MET")
             da_response = dp.getAllFolderArrayResponse(artistname, mature, clientToken, 0)
             gathered_allfolders = gatherGalleryFolderResources(da_response)
             if len(da_response["results"]) == 0:
@@ -298,36 +302,38 @@ def updateallfolders(con, data, clientToken):
                     latest_pp_url = 'none'
                 else:
                     latest_pp_url = da_response["results"][0]["author"]["usericon"]
-                updates.append((new_uuid, last_updated, last_check, gathered_allfolders["img-urls"], latest_pp_url, latest_deviation_url,
+                updates.append((new_uuid, new_update_timestamp, new_check_timestamp, gathered_allfolders["img-urls"], latest_pp_url, latest_deviation_url,
                              gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
             elif len(gathered_allfolders["deviation-ids"]) == 0 or not da_response["results"][0]["deviationid"] == last_ids[0]:
                 if latest_pp_url is None:
                     latest_pp_url = 'none'
                 else:
                     latest_pp_url = da_response["results"][0]["author"]["usericon"]
-                updates.append((new_uuid, last_updated, last_check, gathered_allfolders["img-urls"], latest_pp_url, latest_deviation_url,
+                updates.append((new_uuid, new_update_timestamp, new_check_timestamp, gathered_allfolders["img-urls"], latest_pp_url, latest_deviation_url,
                             gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
             else:
-                checks.append((last_check, artistname, mature))
+                checks.append((new_check_timestamp, artistname, mature))
             debug_index = debug_index + 1
 
             # Batch process updates more frequently to avoid long-running transactions
-            if len(updates) >= 100:  # Process in batches of 100
-                if len(checks) > 0:
-                    psycopg2.extras.execute_values(cursor, check_sql, checks)
-                    con.commit()
-                    checks = []
-                if len(updates) > 0:
-                    psycopg2.extras.execute_values(cursor, change_sql, updates)
-                    con.commit()
-                    updates = []
+            if len(updates) >= 5:  # Process in batches of 100
+                print("Updating with pre-emptive batch of " + str(len(updates)) + " updates")
+                psycopg2.extras.execute_values(cursor, change_sql, updates)
                 con.commit()
+                updates = []
+            if len(checks) >= 5:
+                print("Updating with pre-emptive batch of " + str(len(checks)) + " checks")
+                psycopg2.extras.execute_values(cursor, check_sql, checks)
+                con.commit()
+                checks = []
 
         # Process any remaining updates
         if len(checks) > 0:
+            print("Updating with remaining batch of " + str(len(checks)) + " checks")
             psycopg2.extras.execute_values(cursor, check_sql, checks)
             con.commit()
         if len(updates) > 0:
+            print("Updating with remaining batch of " + str(len(updates)) + " updates")
             psycopg2.extras.execute_values(cursor, change_sql, updates)
             con.commit()
         cursor.close()

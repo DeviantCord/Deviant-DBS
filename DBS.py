@@ -32,7 +32,7 @@ from errite.rabbit.rabbitManager import build_url
 from errite.tools.startupTools import checkStartUpFiles
 import urllib
 
-print("DeviantCord DBS V2.0.2")
+print("DeviantCord DBS V2.0.3")
 print("Developed by Errite Softworks LLC")
 clientid = None
 db_connection = None
@@ -183,7 +183,6 @@ async def main():
                 get_query = "select * from deviantcord.deviation_data WHERE NOT disabled = true AND shard_id = %s;"
                 get_cursor.execute(get_query,(shard_id,))
                 obt_results = get_cursor.fetchall()
-                source_cursor = db_connection.cursor()
                 updateSources(db_connection, obt_results, token)
                 db_connection.commit()
                 get_query = "SELECT * from deviantcord.deviation_data_all WHERE NOT disabled = true AND shard_id = %s;"

@@ -126,7 +126,7 @@ def updateJournals(conn, clienttoken):
                                        infoList["thumbnail-ids"], infoList["excerpts"], artist, mature))
                     
                     # Process journal commits when they reach batch size
-                    if len(journalCommits) >= 100:
+                    if len(journalCommits) >= 5:
                         psycopg2.extras.execute_values(write_cursor, journal_change_sql, journalCommits)
                         conn.commit()
                         journalCommits = []
@@ -135,7 +135,7 @@ def updateJournals(conn, clienttoken):
                     journalCheck.append((timestr, artist))
                     
                     # Process journal checks when they reach batch size
-                    if len(journalCheck) >= 100:
+                    if len(journalCheck) >= 5:
                         psycopg2.extras.execute_values(write_cursor, journal_check_sql, journalCheck)
                         conn.commit()
                         journalCheck = []
@@ -144,7 +144,7 @@ def updateJournals(conn, clienttoken):
                 journalCheck.append((timestr, artist))
                 
                 # Process journal checks when they reach batch size
-                if len(journalCheck) >= 100:
+                if len(journalCheck) >= 5:
                     psycopg2.extras.execute_values(write_cursor, journal_check_sql, journalCheck)
                     conn.commit()
                     journalCheck = []
