@@ -32,7 +32,7 @@ from errite.rabbit.rabbitManager import build_url
 from errite.tools.startupTools import checkStartUpFiles
 import urllib
 
-print("DeviantCord DBS V2.0.3")
+print("DeviantCord DBS V2.0.4")
 print("Developed by Errite Softworks LLC")
 clientid = None
 db_connection = None
