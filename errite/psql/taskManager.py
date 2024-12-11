@@ -233,7 +233,7 @@ def create_nf_deviation_notifications(new_deviation_count, new_hybrid_count, art
                 discord_commits.append(entry)
                 temp_index = temp_index + 1
 
-def handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits, abort):
+def handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits):
     deviantlogger = logging.getLogger("deviantcog")
     obt_latest_id = last_ids[0]
     if inverse:
