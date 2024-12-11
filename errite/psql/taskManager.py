@@ -323,7 +323,6 @@ def handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, f
         deviantlogger.info(f"New deviations found: {new_deviation_count}")
     
     if new_deviation_count == 10:
-        abort = False
         handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits)
     # Checks to see if the entire list of deviations is new
     elif ifAllNewDeviationsListOnly(obt_last_ids, last_ids):
