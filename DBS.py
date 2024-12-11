@@ -193,7 +193,7 @@ async def main():
                 await syncListeners(db_connection, clientsecret, clientid, shard_id, channel_pool)
             elif shard_type.lower() == "journals":
                 updateJournals(db_connection, token)
-                syncJournals(db_connection)
+                syncJournals(db_connection, channel_pool)
             elif shard_type.lower() == "profiles":
                 token = dp.getToken(clientsecret, clientid)
                 sync_artists(db_connection,token, rpool)

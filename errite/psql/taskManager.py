@@ -328,7 +328,7 @@ def handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, f
     # Checks to see if the entire list of deviations is new
     elif ifAllNewDeviationsListOnly(obt_last_ids, last_ids):
         if not obt_latest_id == None:
-            handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits, abort)         
+            handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits)         
 
     if new_hybrid_count > 0:
         commits['hybrid_only'].append((
