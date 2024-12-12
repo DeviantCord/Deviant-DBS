@@ -45,7 +45,6 @@ def updateSources(con, data, clientToken):
                  WHERE deviantcord.deviation_data.artist = data.artist AND deviantcord.deviation_data.folderid = data.folderid AND
                  deviantcord.deviation_data.inverse_folder = data.inverse_folder AND deviantcord.deviation_data.hybrid = data.hybrid 
                  AND deviantcord.deviation_data.mature = data.mature"""
-    #USED BY hybridCommits
     hybrid_change_sql = """ UPDATE deviantcord.deviation_data
                  SET dc_uuid = data.dcuuid, last_update = data.last_update, last_check = data.last_check, 
                  latest_img_urls = data.latest_img_url::text[], latest_pp_url = data.latest_pp_url::text,
@@ -58,7 +57,6 @@ def updateSources(con, data, clientToken):
                  WHERE deviantcord.deviation_data.artist = data.artist AND deviantcord.deviation_data.folderid = data.folderid
                  AND deviantcord.deviation_data.hybrid = data.hybrid AND deviantcord.deviation_data.inverse_folder = data.inverse_folder
                  AND deviantcord.deviation_data.mature = data.mature"""
-    #Used by hybrid only
     hybrid_only_sql = """ UPDATE deviantcord.deviation_data
                      SET last_check = data.last_check, last_hybrid_ids = data.last_hybrid_ids::text[], 
                      hybrid_urls = data.hybrid_urls::text[], hybrid_img_urls = data.hybrid_img_urls::text[] FROM (VALUES %s) 
@@ -66,14 +64,18 @@ def updateSources(con, data, clientToken):
                      WHERE deviantcord.deviation_data.artist = data.artist 
                      AND deviantcord.deviation_data.folderid = data.folderid AND deviantcord.deviation_data.hybrid = data.hybrid
                      AND deviantcord.deviation_data.inverse_folder = data.inverse_folder AND deviantcord.deviation_data.mature = data.mature"""
+    
+    deviantlogger = logging.getLogger("deviantcog")
     test = []
     checks = []
     hybridCommits = []
     hybridOnly = []
-    batch_size = 100
+    batch_size = 5  # Reduced from 100 to match updateallsources
     cursor = con.cursor()
-    try:
-        for row in data:
+    committingData = False
+    
+    for row in data:
+        try:
             check_only = False
             normal_update = True
             has_hybrid = False
@@ -221,36 +223,73 @@ def updateSources(con, data, clientToken):
                 hybridCommits.append((dcuuid, last_updated, last_check, latest_img_url, latest_pp_url, latest_deviation_url,
                          last_urls, last_ids, offset, gathered_hybrids["ids"], gathered_hybrids["urls"],
                                       gathered_hybrids["img-urls"], artistname, folderid, hybrid, inverse, mature))
+
+            # Batch process more frequently
             if len(test) >= batch_size:
+                committingData = True
+                deviantlogger.info(f"Updating with pre-emptive batch of {len(test)} updates")
                 psycopg2.extras.execute_values(cursor, change_sql, test)
+                con.commit()
+                committingData = False
                 test = []
-                con.commit()
+                
             if len(checks) >= batch_size:
+                committingData = True
+                deviantlogger.info(f"Updating with pre-emptive batch of {len(checks)} checks")
                 psycopg2.extras.execute_values(cursor, check_sql, checks)
+                con.commit()
+                committingData = False
                 checks = []
-                con.commit()
+                
             if len(hybridCommits) >= batch_size:
+                committingData = True
+                deviantlogger.info(f"Updating with pre-emptive batch of {len(hybridCommits)} hybrid commits")
                 psycopg2.extras.execute_values(cursor, hybrid_change_sql, hybridCommits)
-                hybridCommits = []
                 con.commit()
-        print("checks " + str(len(checks)))
-        if not len(test) == 0:
+                committingData = False
+                hybridCommits = []
+
+        except Exception as e:
+            if committingData:
+                con.rollback()
+            elif str(test[0][9]) == str(artistname):  # Remove failed artist from batch if it caused the error
+                del test[0]
+            deviantlogger.exception(e)
+            capture_exception(e)
+            print(f"Error processing {artistname}: {str(e)}")
+            continue  # Continue to next artist instead of failing completely
+    
+    try:
+        # Process any remaining updates
+        if len(checks) > 0:
+            deviantlogger.info(f"Updating with remaining batch of {len(checks)} checks")
+            psycopg2.extras.execute_values(cursor, check_sql, checks)
+            con.commit()
+            
+        if len(test) > 0:
+            deviantlogger.info(f"Updating with remaining batch of {len(test)} updates")
             psycopg2.extras.execute_values(cursor, change_sql, test)
             con.commit()
-        if not len(hybridOnly) == 0:
-            psycopg2.extras.execute_values(cursor, hybrid_only_sql, hybridOnly)
-            con.commit()
-        if not len(hybridCommits) == 0:
+            
+        if len(hybridCommits) > 0:
+            deviantlogger.info(f"Updating with remaining batch of {len(hybridCommits)} hybrid commits")
             psycopg2.extras.execute_values(cursor, hybrid_change_sql, hybridCommits)
             con.commit()
-        cursor.close()
-        
+            
+        if len(hybridOnly) > 0:
+            deviantlogger.info(f"Updating with remaining batch of {len(hybridOnly)} hybrid only updates")
+            psycopg2.extras.execute_values(cursor, hybrid_only_sql, hybridOnly)
+            con.commit()
+
     except Exception as e:
-        print("Uh oh, an exception has occured")
-        capture_exception(e)
         con.rollback()
-        cursor.close()
-        print(e)
+        deviantlogger.exception(e)
+        capture_exception(e)
+        print(f"Error in final batch processing: {str(e)}")
+        
+    finally:
+        if not cursor.closed:
+            cursor.close()
 
 def updateallfolders(con, data, clientToken):
     check_sql = """ UPDATE deviantcord.deviation_data_all
@@ -268,10 +307,10 @@ def updateallfolders(con, data, clientToken):
     checks = []
     textSent = False
     cursor = con.cursor()
-    try:
-        debug_index = 0
-        for row in data:
-                
+    debug_index = 0
+    committingData = False
+    for row in data:
+        try:    
             hybridResponse = None
             check_only = False
             normal_update = True
@@ -303,7 +342,7 @@ def updateallfolders(con, data, clientToken):
                 else:
                     latest_pp_url = da_response["results"][0]["author"]["usericon"]
                 updates.append((new_uuid, new_update_timestamp, new_check_timestamp, gathered_allfolders["img-urls"], latest_pp_url, latest_deviation_url,
-                             gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
+                            gathered_allfolders["deviation-urls"], gathered_allfolders["deviation-ids"], artistname, mature))
             elif len(gathered_allfolders["deviation-ids"]) == 0 or not da_response["results"][0]["deviationid"] == last_ids[0]:
                 if latest_pp_url is None:
                     latest_pp_url = 'none'
@@ -317,16 +356,30 @@ def updateallfolders(con, data, clientToken):
 
             # Batch process updates more frequently to avoid long-running transactions
             if len(updates) >= 5:  # Process in batches of 100
+                committingData = True
                 print("Updating with pre-emptive batch of " + str(len(updates)) + " updates")
                 psycopg2.extras.execute_values(cursor, change_sql, updates)
                 con.commit()
+                committingData = False
                 updates = []
             if len(checks) >= 5:
+                committingData = True
                 print("Updating with pre-emptive batch of " + str(len(checks)) + " checks")
                 psycopg2.extras.execute_values(cursor, check_sql, checks)
                 con.commit()
+                committingData = False
                 checks = []
-
+        except Exception as e:
+            if committingData:
+                con.rollback()
+            elif str(updates[0][8]) == str(artistname):
+                del updates[0]
+            print("Notified sentry of error")
+            print(e)
+            deviantlogger.exception(e)
+            capture_exception(e)
+    
+    try:
         # Process any remaining updates
         if len(checks) > 0:
             print("Updating with remaining batch of " + str(len(checks)) + " checks")
