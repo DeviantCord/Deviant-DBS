@@ -247,7 +247,7 @@ def syncJournals(conn, givenPool: Pool):
                     failed_journal_dict = {}
                     failed_journal_dict["failure_type"] = "journal"
                     failed_journal_dict["failed_entries"] = failed_notifications
-                    failed_journal_json = json.dump(failed_journal_dict)
+                    failed_journal_json = json.dumps(failed_journal_dict)
                     writeFailedTaskJson(failed_journal_json)
 
             else:
