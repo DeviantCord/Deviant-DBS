@@ -381,7 +381,6 @@ def refindFolderUUID(artist, bool, folder, accesstoken):
                             jsonFile.write(json.dumps(artdata, indent=4, sort_keys=True))
                             jsonFile.close()
                             return uuid["folderid"];
-                            tmp = True;
                         providedoffset = data["next_offset"]
                         #artdata[artist.lower()]["processed-uuids"].append(uuid['results']['folderid'])4
 

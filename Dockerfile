@@ -1,12 +1,12 @@
 FROM python:3.11
-ADD requirements.txt .
-ADD DBS.py .
-ADD errite/ .
-ADD config.json .
-ADD rabbit.json .
-ADD db.json .
-ADD client.json .
-ADD redis.json .
-ADD .postgresql/ .
+COPY requirements.txt .
+COPY DBS.py .
+COPY errite/ .
+COPY config.json .
+COPY rabbit.json .
+COPY db.json .
+COPY client.json .
+COPY redis.json .
+COPY .postgresql/ .
 RUN pip install -r requirements.txt
 CMD ["python", "DBS.py"]

@@ -69,23 +69,6 @@ def findDuplicateElementArray(array, element):
     return False
 
 
-
-def hasAllFolder(artist):
-    logger = logging.getLogger('errite.da.jsonTools')
-    with open("artdata.json", "r") as jsonFile:
-        try:
-            artdata = json.load(jsonFile)
-            jsonFile.close()
-
-            if artdata["art-data"][artist.lower()]["all"]["currentindex"] == 255:
-                return True
-            else:
-                return True
-        except KeyError:
-            # print("Folder check, revealed found that the folder is not present in ArtData.")
-            return False
-
-
 def folderExists(artist,foldername):
     """
             Method ran to check if a folder is already in the ArtData json file.
