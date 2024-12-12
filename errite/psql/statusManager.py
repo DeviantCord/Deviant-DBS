@@ -94,7 +94,7 @@ def syncStatuses(conn, givenPool: Pool):
                     failed_status_dict = {}
                     failed_status_dict["failure_type"] = "status"
                     failed_status_dict["failed_entries"] = failed_notifications
-                    failed_status_json = json.dump(failed_status_dict)
+                    failed_status_json = json.dumps(failed_status_dict)
                     writeFailedTaskJson(failed_status_dict)
                 post_notif_sql = grab_sql("add_status_notification")
                 try:

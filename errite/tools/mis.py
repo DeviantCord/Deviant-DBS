@@ -62,7 +62,7 @@ def checkHybridResources(da_data, artdata):
             check_var = entry["excerpt"]
         except KeyError:
             if not findDuplicateElementArray(artdata, entry["deviationid"]):
-                ++data_resources["new-hybrids"]
+                data_resources["new-hybrids"] += 1
             else:
                 data_resources["seen-hybrids"].append(entry["deviationid"])
                 data_resources["seen-hybrid-urls"].append(entry["url"])
@@ -233,8 +233,6 @@ def convertBoolString(bool):
 def convertStringBool(string):
     if string.lower() == "true":
         return True;
-    if string.lower() == "false":
-        return False;
     else:
         return False;
 
