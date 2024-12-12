@@ -46,7 +46,7 @@ def getToken(clientsecret, clientid):
         tokenRequestURL,
         data=None,
         headers={
-            'User-Agent': 'DeviantCord 3.0 DBS'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
     )
     # logger.info(tokenRequestURL)
@@ -142,33 +142,38 @@ def getFolderArrayResponse(artist, bool, folder, accesstoken, offset):
             return
 
 
-def getAllFolderArrayResponse(artist,bool, accesstoken, offset):
+def getAllFolderArrayResponse(artist, bool, accesstoken, offset):
     """
-        Method ran to get the Gallery Folder data all view from deviantart's API.
-
-        :param artist: The artist's name that owns the folder.
-        :type artist: string
-        :param bool: Whether mature folders will show or not.
-        :type bool: bool
-        :param accesstoken: The DA Access token to use for this query
-        :type accesstoken: string
-        :param offset: The offset value at which to request the gallery folder contents from. The starting value
-        :type offset: int
-        :return: array
-        """
-
+    Method ran to get the Gallery Folder data all view from deviantart's API.
+    
+    :param artist: The artist's name that owns the folder.
+    :type artist: string
+    :param bool: Whether mature folders will show or not.
+    :type bool: bool
+    :param accesstoken: The DA Access token to use for this query
+    :type accesstoken: string
+    :param offset: The offset value at which to request the gallery folder contents from
+    :type offset: int
+    :return: array
+    """
     folderRequestURL = "https://www.deviantart.com/api/v1/oauth2/gallery/all" + "?username=" + artist + "&access_token=" + accesstoken + "&limit=10&mature_content=" + convertBoolString(
         bool) + "&offset=" + str(offset)
-    req = urllib.request.Request(
-        folderRequestURL,
-        data=None,
-        headers={
-            'User-Agent': 'DeviantCord 3.0 DBS'
-        }
-    )
-    with urllib.request.urlopen(req) as url:
-        data = json.loads(url.read().decode())
-        return data;
+    
+    # Set up retry strategy
+    user_agent = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    retries = Retry(connect=5, read=2, redirect=5, backoff_factor=3)
+    http = PoolManager(retries=retries, headers=user_agent)
+    
+    try:
+        # Use urllib3 instead of urllib.request for better timeout handling
+        response = http.request('GET', folderRequestURL, timeout=30.0)
+        data = json.loads(response.data.decode('UTF-8'))
+        return data
+        
+    except (urllib3.exceptions.TimeoutError, urllib3.exceptions.ConnectionError) as e:
+        logger = logging.getLogger('errite.da.daparser')
+        logger.error(f"Connection error when fetching gallery data: {str(e)}")
+        raise
 
 def getUserStatusesResponse(artist:str, accessToken:str, offset:str):
     user_agent = {'user-agent': 'DeviantCord 3.0 DBS'}
