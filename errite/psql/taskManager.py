@@ -26,6 +26,7 @@ import urllib.error
 import psycopg2
 import psycopg2.extras
 import datetime
+import traceback
 
 from errite.psql.sqlManager import grab_sql
 from errite.da.datools import localDetermineNewDeviation
@@ -233,78 +234,135 @@ def create_nf_deviation_notifications(new_deviation_count, new_hybrid_count, art
                 discord_commits.append(entry)
                 temp_index = temp_index + 1
 
+
+
+
+
+# This handles the catchup for deviations. SQL updates are handled in handle_nf_deviation_updates
+
 def handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits):
     deviantlogger = logging.getLogger("deviantcog")
-    obt_latest_id = last_ids[0]
-    if inverse:
-        deviantlogger.info("Catching up on deviations")
-        didCatchup = True
-        foundDeviation = False
-        offset = 0
-        obt_token = dp.getToken(deviant_secret, deviant_id)
-        commits['data_resources']["ids"] = []
-        commits['data_resources']["urls"] = []
-        commits['data_resources']["img-urls"] = []
-        while not foundDeviation:
-            folder_response = dp.getGalleryFolderArrayResponse(artist, mature, folderid, obt_token, offset)
-            try:
-                if not folder_response["has_more"] and len(folder_response["results"]) == 0:
-                    commits['data_resources']   ["ids"] = []
-                    didCatchup = False
-                    abort = True
-                    break
-            except Exception as ex:
-                didCatchup = False
-                break
-            gotId = idlistHasId(last_ids[0], folder_response)
-            foundDeviation = gotId
-            if not foundDeviation:
-                catchup_index = 0
-                for entry in folder_response["results"]:
-                    if entry["deviationid"] == last_ids[0]:
-                        break
-                    else:
-                        url = get_image_url(entry)
-                        commits['data_resources']["img-urls"].append(url)
-            offset = offset + 10
-        reachedEnd = False
-    elif not inverse:
-        deviantlogger.info("Catching up on deviations")
-        didCatchup = True
-        foundDeviation = False
-        offset = 0
-        obt_token = dp.getToken(deviant_secret, deviant_id)
-        commits['data_resources']["ids"] = []
-        commits['data_resources']["urls"] = []
-        commits['data_resources']["img-urls"] = []
-        while not reachedEnd:
-            index = index - 1
-            if obt_latest_id == folder_response["results"][index]["deviationid"]:
-                break
-            else:
+    finishFirstPass = False
+    obt_token = dp.getToken(deviant_secret, deviant_id)
+    commits['data_resources']["ids"] = []
+    commits['data_resources']["urls"] = []
+    commits['data_resources']["img-urls"] = []
+    new_pages = new_deviation_count // 10
+    subtract_deviations = new_deviation_count - (new_pages * 10)
+    max_index = 0
+    if subtract_deviations > 0:
+        max_index = subtract_deviations - 1
+    current_index = max_index
+    needsSubtract = False
+
+    if not inverse:
+        # This code needs to be modified to handle when inverse is false
+        if new_deviation_count > 10:
+            current_page = 0
+            while not reachedEnd:
+                finishedParsing = False
+                obt_folder_response = dp.getGalleryFolderArrayResponse(artist, mature, folderid, obt_token, current_page * 10)
+                while not finishedParsing:
+                    # Process results in reverse order using list slicing
+                    for entry in obt_folder_response["results"]:
+                        commits['data_resources']["img-urls"].append(get_image_url(entry))
+                        commits['data_resources']["ids"].append(entry["deviationid"]) 
+                        commits['data_resources']["urls"].append(entry["url"])
+                    finishedParsing = True
+                current_page += 1
+                if new_pages == current_page:
+                    reachedEnd = True
+                    if subtract_deviations > 0:
+                        needsSubtract = True
+                
+
+        # When the new deviations are not greater than 10, we just need to iterate over them and append them to 
+        # the necessary lists. We do not need to query the API for more deviations and iterate. 
+        # With those greater than 10, we would have to query the API and iterate multiple times. 
+        if not subtract_deviations == 0 or new_deviation_count == 10:
+            obt_folder_response = dp.getGalleryFolderArrayResponse(artist, mature, folderid, obt_token, 0)
+            current_index = 0
+            while not finishFirstPass:
+                entry = obt_folder_response["results"][current_index]
                 url = get_image_url(entry)
-                commits['data_resources']   ["img-urls"].append(url)
-                commits['data_resources']["ids"].append(folder_response["results"][index]["deviationid"])
-                commits['data_resources']["urls"].append(folder_response["results"][index]["url"])
+                commits['data_resources']["img-urls"].append(url)
+                commits['data_resources']["ids"].append(entry["deviationid"])
+                commits['data_resources']["urls"].append(entry["url"])
+                current_index = current_index + 1
+                if current_index == subtract_deviations:
+                    finishFirstPass = True
+            reachedEnd = True
         max_hits = len(commits['data_resources']["ids"])
-        hits = len(commits['data_resources']["ids"])
+        hits = 0
         catchup_finished = False
-        while not hits == 0:
-            hits = hits - 1
+        while not hits == max_hits:
             dump_tstr = str(datetime.datetime.now())
             entry:DeviationNotification = DeviationNotification(
                 "normal", channel_id, artist, foldername, commits['data_resources']["urls"][hits],
             commits['data_resources']["img-urls"][hits], obt_pp,inverse, dump_tstr, mature, isGroup)
             commits['discord_commits'].append(entry)
-            
+            hits = hits + 1
+
+    elif inverse:
+        if new_deviation_count > 10:
+            while not reachedEnd:
+                new_pages = new_pages - 1
+                finishedParsing = False
+                obt_folder_response = dp.getGalleryFolderArrayResponse(artist, mature, folderid, obt_token, new_pages * 10)
+                while not finishedParsing:
+                    # Process results in reverse order using list slicing
+                    for entry in reversed(obt_folder_response["results"]):
+                        commits['data_resources']["img-urls"].append(get_image_url(entry))
+                        commits['data_resources']["ids"].append(entry["deviationid"]) 
+                        commits['data_resources']["urls"].append(entry["url"])
+                    finishedParsing = True
+                
+                if new_pages == 0:
+                    reachedEnd = True
+                    if subtract_deviations > 0:
+                        needsSubtract = True
+
+        # When the new deviations are not greater than 10, we just need to iterate over them and append them to 
+        # the necessary lists. We do not need to query the API for more deviations and iterate. 
+        # With those greater than 10, we would have to query the API and iterate multiple times. 
+        if not subtract_deviations == 0 or new_deviation_count == 10:
+            obt_folder_response = dp.getGalleryFolderArrayResponse(artist, mature, folderid, obt_token, 0)
+            current_index = len(obt_folder_response["results"])
+            if needsSubtract:
+                current_index = subtract_deviations
+            while not finishFirstPass:
+                current_index = current_index - 1
+                entry = obt_folder_response["results"][current_index]
+                url = get_image_url(entry)
+                commits['data_resources']["img-urls"].append(url)
+                commits['data_resources']["ids"].append(entry["deviationid"])
+                commits['data_resources']["urls"].append(entry["url"])
+                if current_index == 0:
+                    finishFirstPass = True
+            reachedEnd = True
+        max_hits = len(commits['data_resources']["ids"])
+        hits = len(commits['data_resources']["ids"]) - 1
+        catchup_finished = False
+        while not catchup_finished:
+            dump_tstr = str(datetime.datetime.now())
+            entry:DeviationNotification = DeviationNotification(
+                "normal", channel_id, artist, foldername, commits['data_resources']["urls"][hits],
+            commits['data_resources']["img-urls"][hits], obt_pp,inverse, dump_tstr, mature, isGroup)
+            commits['discord_commits'].append(entry)
+            if not hits == 0:
+                hits = hits - 1
+            else:
+                catchup_finished = True
 
 
-def handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp):
+def handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid,
+                                channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids,
+                                inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp):
     deviantlogger = logging.getLogger("deviantcog")
     
     if new_deviation_count == 0 and new_hybrid_count == 0:
         deviantlogger.info("No updates required")
-        return [], [], []
+        return [], [], [], [], {}
 
     commits = {
         'hybrid': [],
@@ -316,7 +374,8 @@ def handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, f
     obt_latest_id = last_ids[0]
     didCatchup = False
     timestr = datetime.datetime.now()
-    if new_deviation_count > 0 and new_deviation_count > 10:
+    if new_deviation_count > 0 and new_deviation_count < 10:
+        #TODO HERE
         commits['normal'].append((
             obt_dcuuid, timestr, obt_last_ids, artist, folderid, serverid, channel_id
         ))
@@ -324,18 +383,28 @@ def handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, f
     
     if new_deviation_count == 10:
         handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits)
+        deviantlogger.info(f"Catchup complete for deviations: {new_deviation_count}")
+        commits['normal'].append((
+            obt_dcuuid, timestr, obt_last_ids, artist, folderid, serverid, channel_id
+        ))
+        deviantlogger.info(f"Finished adding SQL update for listener " + foldername)
     # Checks to see if the entire list of deviations is new
     elif ifAllNewDeviationsListOnly(obt_last_ids, last_ids):
         if not obt_latest_id == None:
             handle_nf_catchup(new_deviation_count, new_hybrid_count, artist, foldername,folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp, commits)         
-
+            deviantlogger.info(f"Catchup complete for deviations: {new_deviation_count}")
+            commits['normal'].append((
+                obt_dcuuid, timestr, obt_last_ids, artist, folderid, serverid, channel_id
+            ))
+            deviantlogger.info(f"Finished adding SQL update for listener " + foldername)
+            
     if new_hybrid_count > 0:
         commits['hybrid_only'].append((
             obt_dcuuid, timestr, obt_hybrid_ids, artist, folderid, serverid, channel_id
         ))
         deviantlogger.info(f"New hybrid deviations found: {new_hybrid_count}")
 
-    if new_deviation_count > 0 and new_hybrid_count > 0:
+    if new_hybrid_count > 0 and new_hybrid_count < 10:
         commits['hybrid'].append((
             obt_dcuuid, timestr, obt_last_ids, obt_hybrid_ids, artist, folderid, serverid, channel_id
         ))
@@ -356,6 +425,8 @@ async def syncListeners(conn,deviant_secret, deviant_id, shard_id, givenPool: Po
         :type source_cursor: cursor
 
     """
+
+    # Set SQL
     change_all_sql = """ UPDATE deviantcord.deviation_listeners
                          SET dc_uuid = data.dcuuid, last_update = data.last_update, 
                         last_ids = data.last_ids::text[] FROM (VALUES %s) AS data(dcuuid, last_update, last_ids, artist,serverid, channelid, mature)
@@ -383,6 +454,7 @@ async def syncListeners(conn,deviant_secret, deviant_id, shard_id, givenPool: Po
 
     for data in obt:
         try:
+            # Close cursor if it is open
             if task_cursor.statusmessage:
                 task_cursor.close()
                 conn.commit()
@@ -404,7 +476,6 @@ async def syncListeners(conn,deviant_secret, deviant_id, shard_id, givenPool: Po
             inverse = data[11]
             hybrid = data[10]
             last_update = data[8]
-            # TODO HERE IS THE BUG
             last_ids = data[13]
             last_hybrids = data[14]
             mature = data[15]
@@ -445,15 +516,18 @@ async def syncListeners(conn,deviant_secret, deviant_id, shard_id, givenPool: Po
                     new_hybrid_count = 0
                     print("DC UUIDs do not match")
                     if hybrid:
+                        # Compare how many new deviations and hybrids there are via comparing deviation IDs
                         new_deviation_count = localDetermineNewDeviation(obt_last_ids, last_ids, inverse)
                         new_hybrid_count = localDetermineNewDeviation(obt_hybrid_ids, last_hybrids, inverse)
-                        
+                        # Create the needed database commits, as well as Discord Notification Commits. 
                         hybrid_commits, normal_commits, hybrid_only_commits, discord_commits, data_resources = handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, foldername, folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp)
                     else:
                         new_deviation_count = localDetermineNewDeviation(obt_last_ids, last_ids, inverse)
+                        #TODO Suspect here?
                         normal_commits = handle_nf_deviation_updates(new_deviation_count, new_hybrid_count, artist, foldername, folderid, serverid, channel_id, obt_dcuuid, obt_last_ids, last_ids, obt_hybrid_ids, last_hybrids, inverse, deviant_secret, deviant_id, mature, isGroup, obt_pp)
                     create_nf_deviation_notifications(new_deviation_count, new_hybrid_count, artist, foldername, mature, isGroup, folderid, serverid, channel_id, obt_dcuuid, obt_last_urls, obt_img_urls, obt_pp, inverse, discord_commits, obt_hybrid_urls, obt_hybrid_img_urls, obt_hybrid_ids)
                     await handle_nf_deviation_notifications(discord_commits, normal_commits, hybrid_commits, hybrid_only_commits, givenPool, conn)
+                    conn.commit()
             if foldertype == "all-folder":
                 source_cursor.execute(source_get_all_sql, (artist, mature))
                 obtained_source = source_cursor.fetchmany(1)
@@ -509,6 +583,9 @@ async def syncListeners(conn,deviant_secret, deviant_id, shard_id, givenPool: Po
         except Exception as e:
             capture_exception(e)
             print(e)
+            tb = traceback.extract_tb(e.__traceback__)
+            line_number = tb[-1].lineno
+            print(f"Exception occurred on line {line_number}")
             conn.rollback()
     if task_cursor and not task_cursor.closed:
         task_cursor.close()

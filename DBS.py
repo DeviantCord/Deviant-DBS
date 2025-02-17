@@ -32,7 +32,7 @@ from errite.rabbit.rabbitManager import build_url
 from errite.tools.startupTools import checkStartUpFiles
 import urllib
 
-print("DeviantCord DBS V2.0.4")
+print("DeviantCord DBS V2.0.6")
 print("Developed by Errite Softworks LLC")
 clientid = None
 db_connection = None
@@ -115,7 +115,7 @@ async def main():
                         # We recommend adjusting this value in production.
                         profiles_sample_rate=1.0,
                         ignore_errors = [KeyboardInterrupt],
-                        release="deviant-dbs@2.0.4"
+                        release="deviant-dbs@2.0.6"
                     )
                 sensitiveData = json.load(clientjsonFile)
                 configjsonFile.close()

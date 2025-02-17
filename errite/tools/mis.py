@@ -137,11 +137,11 @@ def gatherGalleryFolderResources(data):
                 except KeyError:
                     try:
                         data_resources["img-urls"].append(str(entry["videos"][0]["src"]) + str("DEVIANTCORDENDINGUSENONPREVIEW"))
-                    except KeyError:
+                    except (KeyError, IndexError):
                         try:
                             data_resources["img-urls"].append(entry["thumbs"]["src"])
 
-                        except:
+                        except KeyError:
                             data_resources["img-urls"].append("IGNORETHISDEVIATION")
 
     return data_resources
