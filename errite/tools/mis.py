@@ -34,13 +34,13 @@ def enumerateAllID(data):
         gathered_id.append(entry)
     return gathered_id
 
-def findFileName(partialFileName:str) -> str:
+def findNewFileName(partialFileName:str) -> str:
     found:bool = False
     id = 1
-    fileName = partialFileName + "-" + str(id)
+    fileName = partialFileName + "-" + str(id) + ".json"
     while not found:
-        fileName = partialFileName + "-" + str(id)
-        if os.path.exists(fileName):
+        fileName = partialFileName + "-" + str(id) + ".json"
+        if not os.path.exists(fileName):
             found = True
         else:
             id = id + 1

@@ -37,7 +37,7 @@ from sentry_sdk import capture_exception
 from errite.models.DeviationNotification import DeviationNotification
 from errite.models.JournalNotification import JournalNotification
 from errite.models.StatusNotification import StatusNotification
-from errite.tools.mis import findFileName
+from errite.tools.mis import findNewFileName
 from aio_pika.pool import Pool
 from errite.io.failedTask import getFailedTaskJsonFiles
 
@@ -174,7 +174,7 @@ async def handle_nf_deviation_notifications(discord_commits, normal_commits, hyb
                     capture_exception(ex)
 
         if failed_notifications:
-            with open(findFileName("notification-failover"), "w+") as failedNotificationFile:
+            with open(findNewFileName("notification-failover"), "w+") as failedNotificationFile:
                 failedNotificationFile.write(json.dumps(failed_notifications))
 
         # Final commit for any remaining transactions
@@ -572,7 +572,7 @@ async def syncListeners(conn,deviant_secret, deviant_id, shard_id, givenPool: Po
                                 failed_notifications.append(notification)
                                 capture_exception(commonEx)
                     if not len(failed_notifications) == 0:
-                        with open(findFileName("notification-failover"), "w+") as failedNotificationFile:
+                        with open(findNewFileName("notification-failover"), "w+") as failedNotificationFile:
                             failedNotificationFile.write(json.dumps(failedNotificationFile))
                             failedNotificationFile.close()
 
